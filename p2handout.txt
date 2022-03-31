@@ -1,0 +1,256 @@
+         Converting and Evaluating Expressions for Project 2
+                               CPS 222
+          Exerpted from Prof. Russell Bjork's lecture notes
+
+III. Processing Arithmetic Expressions
+---- ---------- ---------- -----------
+
+   A. A very important use of stacks is in the translation and execution of
+      arithmetic expressions.  This is normally illustrated with arithmetic
+      expressions such as the following:
+
+        a + b * c / (d + e)
+
+      but the same approach applies to other expressions - e.g. a sql query:
+
+        select *
+            from employees
+            where title = 'supervisor'
+                  or salary > 50000 and hired < '01/01/90';
+
+   B. Arithmetic (and other) expressions can be written using three
+      different notation systems:
+
+      1. Infix - the system we normally use.  Operators are written in between
+         their operands: a + b.  While this system is familiar to us, it has
+         a couple of key limitations:
+
+         a. When an operand appears between two operators, it is not
+            immediately clear which operator is done first - e.g.
+
+                a + b * c
+
+            This problem is handled in practice by some combination of the
+            following:
+
+            - A left-to-right or right-to-left rule
+            - A table of operator precedence (e.g. * is usually done before +)
+            - Parentheses
+
+            Unfortunately, these rules are not always consistent from one
+            programming language to another; and machine evaluation of such
+            expressions is cumbersome since look ahead is needed before deciding
+            whether a given operator can be applied now.
+
+         b. Infix notation can only use operators that have one or two
+            operands - for three or more, an alternate notations such as
+            functional notation (actually a form of prefix) must be used.
+
+      2. Prefix or Polish notation - invented by Lukasiewicz.  An operator
+         immediately preceeds its operands.  Ex:
+
+         infix          prefix
+
+         a+b            +ab
+         a+b*c          +a*bc
+
+         Note: precedence is never an issue, parentheses are never needed,
+         any number of operands can be used for a given operator.
+
+         Trivia question: where have you been using prefix notation for years?
+
+         Answer: in functions like sin(x).  Sin is the operator; x its argument.
+
+      3. Postfix or Reverse Polish notation (RPN):
+
+         infix          postfix
+
+         a+b            ab+
+         a+b*c          abc*+
+
+         Again: no precedence problems; an operator can have any number of
+         operands.
+
+      4. The latter is especially suited to machine evaluation of expressions.
+
+   C. An expression written in postfix can be easily evaluated by using a
+      stack, according to the following rules:
+
+      1. When an operand is encountered in the postfix, push it on the stack.
+
+      2. When an operator is encountered, pop the required number of operands,
+         apply the operator, then push the result.  If there are not enough
+         items on the stack to supply the operands needed, then the expression
+         is ill-formed.
+
+      3. At the end of the scan, the stack should contain a single value, which
+         is the result of the expression.  (If not, then the expression is
+         ill-formed.)
+
+      4. Example: infix 1+(2+3)*(4-5)  => 1 2 3 + 4 5 - * +
+
+        char scanned            Resultant stack
+
+        1                       1
+        2                       1 2
+        3                       1 2 3
+        +                       1 5
+        4                       1 5 4
+        5                       1 5 4 5
+        -                       1 5 -1          Note: second operand popped 1st
+        *                       1 -5
+        +                       -4
+
+   D. An expression in postfix can easily be converted by a compiler into
+      machine-language code for evaluation.
+
+      1. On a stack architecture machine the task is especially easy.  A
+         stack machine has operations like the following:
+
+        PUSH    operand
+        POP     operand
+        ADD     ; no operands - uses stack
+        SUB     ; ditto
+        MUL     ; ditto
+        DIV     ; ditto
+
+        The above expression translates into the following stack code:
+
+        PUSH    1
+        PUSH    2
+        PUSH    3
+        ADD
+        PUSH    4
+        PUSH    5
+        SUB
+        MUL
+        POP     result          - corresponds to :=
+
+      NOTE: This is actually the approach used by the Java compiler.  The
+            Java Virtual machine uses a run-time stack, with primitive
+            operations for pushing, popping, and doing arithmetic
+
+   E. Converting an infix expression to postfix is obviously a necessary
+      prelude to any of the above.  This task is a bit more complex, but
+      is not terribly hard.  It also uses a stack - this time a stack of
+      OPERATORS rather than operands.  Note, then, that for direct
+      interpretation of an infix expression two stacks are used: an operator
+      stack to convert from infix to RPN, and an operand stack to evaluate
+      the RPN.
+
+      1. We assign to each operator a precedence value.  For example, the
+         following would work for a subset of the arithmetic operators of
+         C/C++:
+                operator        precedence
+
+                +               1
+                -               1
+                *               2
+                /               2
+                %               2
+
+         (For the above, we require that operators of equal precedence are
+          evaluated left to right).
+
+         NOTE: The actual list of operators for C/C++ has 18 levels of
+               precedence!
+
+      2. One special issue we must deal with is parentheses.
+
+         a. Note that infix is the only one of the three notations that needs
+            to use parentheses - e.g.
+
+            The infix expressions (1 + 2) * 3 and 1 + (2 * 3) are clearly
+            different, and the parentheses are needed in at least one case to
+            specify the intended interpretation.   The equivalent prefix and
+            postfix forms are:
+
+            Prefix:             * + 1 2 3               + 1 * 2 3
+            Postfix:            1 2 + 3 *               1 2 3 * +
+
+         b. Thus, our algorithm will have to handle parentheses in the incoming
+            infix expression, but will never output parentheses to the outgoing
+            postfix expression.
+
+         c. We will treat parentheses as a special kind of operator.  In
+            particular, the '(' will be given precedence value 0.  (The ')'
+            doesn't actually need a precedence.)
+
+      3. Our algorithm is as follows, assuming the expression is well-formed:
+
+         for each character in the input do
+           switch character scanned
+              case operand:
+                output it immediately to the postfix
+              case operator:
+                while stack is not empty and
+                      precedence (top operator on the stack) >=
+                        precedence (character scanned) do
+                   pop top operator from the stack and output it to postfix
+                push character scanned
+              case '(':
+                push character scanned
+              case ')':
+                while top of stack is not a '(' do
+                   pop top operator from the stack and output it to postfix
+                pop the '(' from the stack and discard it
+
+         at end of input
+           while stack is not empty do
+                pop top character from the stack and output it to postfix
+
+        Example: 1+(2+3)*(4-5):
+
+        Input char      Stack                           Postfix
+
+        1                                               1
+        +               +                               1
+        (               +(                              1
+        2               +(                              1 2
+        +               +(+                             1 2
+        3               +(+                             1 2 3
+        )               +(                              1 2 3 +
+                        +
+        *               +*                              1 2 3 +
+        (               +*(                             1 2 3 +
+        4               +*(                             1 2 3 + 4
+        -               +*(-                            1 2 3 + 4
+        5               +*(-                            1 2 3 + 4 5
+        )               +*(                             1 2 3 + 4 5 -
+                        +*                              1 2 3 + 4 5 -
+        eol             +                               1 2 3 + 4 5 - *
+                                                        1 2 3 + 4 5 - * +
+
+      4. Error-checking may be added as follows:
+
+         i. Use a variable expected of type enum { OPERAND, OPERATOR },
+            initially set to OPERAND.
+
+        ii. Use the following decision table:
+
+        Current value of        Input           Additional action taken
+        expected                                (in addition to basic algorithm)
+
+        OPERAND                 operand         expected = OPERATOR
+        OPERAND                 +, -, *, /      error - operand expected
+        OPERAND                 (               (none)
+        OPERAND                 )               error - operand expected
+        OPERATOR                operand         error - operator expected
+        OPERATOR                +, -, *, /      expected = OPERAND
+        OPERATOR                (               error - operator expected
+        OPERATOR                )               (none)
+        (either value)          Any character   error - invalid character
+                                not listed
+                                above
+
+       iii. In addition, the following must be handled:
+
+          - When a ')' is seen, if the operator stack becomes empty before a
+            '(' is found then there is an error.
+
+          - If the operator stack contains any '(' when the end of input is
+            seen (i.e. a '(' is popped from the stack during the final loop),
+            then there is an error.
+
+          - When end of input is reached, if expecting is not OPERATOR there
+            is an error.
